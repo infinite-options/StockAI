@@ -6,12 +6,14 @@ import numpy as np
 import os
 from   sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
-
+import datetime
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import layers
 from tensorflow.keras.callbacks import EarlyStopping, LambdaCallback
-
+'''
+-------------------------------------------------------------------------------
+'''
 
 # from config import BASE_DIR
 # Define the path to config.py
@@ -30,7 +32,7 @@ from tensorflow.keras.callbacks import EarlyStopping, LambdaCallback
 
 print("In Stock Prediction File")
 
-BASE_DIR = r'/Users/pmarathay/code/Stock-Price-Prediction'
+BASE_DIR = r'C:\Users\nilay\OneDrive - Cal State Fullerton (1)\Desktop\NILAY-TO-JOB-DATA\SPRING 2024\CPSC 597 Project\Stock-Price-Prediction'
 
 print("Base_DIR: ", BASE_DIR)
 
@@ -67,7 +69,9 @@ for column in ['Open', 'High', 'Low', 'Close']:
     df[column] = scalers[column].fit_transform(df[[column]])
     print(df[column])
 
-
+'''
+-------------------------------------------------------------------------------
+'''
 
 # Function to create a windowed dataframe
 def df_to_windowed_df(dataframe, first_date_str, last_date_str, n=3):
@@ -148,10 +152,12 @@ def df_to_windowed_df(dataframe, first_date_str, last_date_str, n=3):
 windowed_df = df_to_windowed_df(df, 
                                 '2016-06-10', 
                                 '2024-06-27',
-                                n=1)
+                                n=5)
 print(windowed_df)
 
-
+'''
+-------------------------------------------------------------------------------
+'''
 
 #  Separating Window DF into 2 parts:  Past Dates (Training and Validation) and Prediction Dates
 def windowed_df_to_date_X_y(windowed_dataframe):
@@ -197,7 +203,9 @@ print("Training Data (shows n): ", X)
 print("Shape of Target Data: ", y.shape)
 print("Prediction Data (actual value): ", y)
 
-
+'''
+-------------------------------------------------------------------------------
+'''
 
 q_80 = int(len(dates) * .80)  # Training Data 80%
 q_90 = int(len(dates) * .90)  # Validation Data 10%
@@ -207,7 +215,9 @@ dates_train, X_train, y_train = dates[:q_80], X[:q_80], y[:q_80]
 dates_val, X_val, y_val = dates[q_80:q_90], X[q_80:q_90], y[q_80:q_90]
 dates_test, X_test, y_test = dates[q_90:], X[q_90:], y[q_90:]
 
-
+'''
+-------------------------------------------------------------------------------
+'''
 # Plot Chart
 plt.figure(figsize=(20, 10))
 
@@ -222,7 +232,9 @@ plt.xlabel('Date')
 plt.ylabel('Value')
 
 plt.show()
-
+'''
+-------------------------------------------------------------------------------
+'''
 # Model Architecture
 # Define the model
 model = Sequential([
@@ -253,7 +265,9 @@ model.fit(X_train, y_train,
           validation_data=(X_val, y_val), 
           epochs=100, 
           callbacks=[early_stopping, print_callback])
-
+'''
+-------------------------------------------------------------------------------
+'''
 # # # Print statement after each
 # # class TrainingCallback(Callback):
 # #     def on_epoch_end(self, epoch, logs=None):
@@ -275,7 +289,9 @@ predictions = model.predict(X_test)
 print("Prediction Dates: ", dates[q_90:])
 print("Predictions: ", predictions)
 
-
+'''
+-------------------------------------------------------------------------------
+'''
 
 # Inverse scaling the predictions
 inv_predictions = {
@@ -323,4 +339,79 @@ plt.ylabel('Price')
 
 # Adding each date as a tick on the x-axis
 plt.xticks(filtered_dates, rotation=45)
+plt.show()
+
+'''
+-------------------------------------------------------------------------------
+'''
+
+
+import numpy as np
+import pandas as pd
+import datetime
+import matplotlib.pyplot as plt
+from pandas.tseries.offsets import BDay
+
+# Function to predict the values for the next X business days
+def predict_next_X_days(model, last_input, start_date):
+    predicted_dates = []
+    predicted_values = []
+
+    current_input = last_input
+
+    for _ in range(9):  # Predicting the next X business days
+        # Predict the next day
+        prediction = model.predict(current_input)
+        
+        # Store the prediction
+        predicted_values.append(prediction.flatten())
+
+        # Prepare the next input
+        next_input = current_input[0, 1:, :].tolist()  # Drop the first day
+        next_input.append(prediction.flatten().tolist())  # Add the new prediction
+        current_input = np.array([next_input])
+
+        # Get the next business day
+        last_date = start_date if len(predicted_dates) == 0 else predicted_dates[-1]
+        next_date = pd.Timestamp(last_date) + pd.offsets.BDay()  # Use BDay to skip weekends
+        predicted_dates.append(next_date)
+
+    # Convert predicted values to numpy array for inverse scaling
+    predicted_values = np.array(predicted_values)
+
+    return predicted_dates, predicted_values
+
+# Assuming X_test and scalers are already defined as in the previous code
+last_input = X_test[-1:]  # Example input data
+start_date = pd.Timestamp('2024-06-27')  # Start date for predictions
+
+# Predict the next 30 business days
+predicted_dates, predicted_values = predict_next_X_days(model, last_input, start_date)
+
+# Inverse scaling the predictions (assuming scalers and model_2 are defined appropriately)
+inv_predictions = {
+    'Open': scalers['Open'].inverse_transform(predicted_values[:, 0].reshape(-1, 1)).flatten(),
+    'High': scalers['High'].inverse_transform(predicted_values[:, 1].reshape(-1, 1)).flatten(),
+    'Low': scalers['Low'].inverse_transform(predicted_values[:, 2].reshape(-1, 1)).flatten(),
+    'Close': scalers['Close'].inverse_transform(predicted_values[:, 3].reshape(-1, 1)).flatten()
+}
+
+# Convert predictions to DataFrame for better visualization
+predicted_df = pd.DataFrame(inv_predictions, index=predicted_dates)
+
+# Plotting the predictions
+plt.figure(figsize=(20, 10))
+
+# Plotting 'Close' prices
+plt.plot(predicted_df.index, predicted_df['Open'], label='Predicted Open (Next X Business Days)', linestyle='--', color='blue')
+plt.plot(predicted_df.index, predicted_df['High'], label='Predicted High (Next X Business Days)', linestyle='--', color='green')
+plt.plot(predicted_df.index, predicted_df['Low'], label='Predicted Low (Next X Business Days)', linestyle='--', color='red')
+plt.plot(predicted_df.index, predicted_df['Close'], label='Predicted Close (Next X Business Days)', linestyle='--', color='orange')
+
+plt.legend()
+plt.title('Predicted Stock Prices for the Next X Business Days')
+plt.xlabel('Date')
+plt.ylabel('Price')
+
+plt.xticks(predicted_df.index, rotation=45)
 plt.show()
